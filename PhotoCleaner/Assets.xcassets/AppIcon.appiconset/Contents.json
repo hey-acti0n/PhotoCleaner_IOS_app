@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "Circle-icons-image.svg.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
