@@ -23,33 +23,58 @@ struct PhotoSelectionView: View {
                     VStack {
                         // Заголовок
                         HStack {
-                            Text("Выберите фото для начала")
-                                .font(.title2)
+                            Text("Select start point")
+                                .font(.title3)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                             
                             Spacer()
                             
-                            Text("\(photoManager.photos.count)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
+                            VStack(alignment: .trailing) {
+                                Text("\(photoManager.photos.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.blue)
+                                
+                                // Статистика по типам медиафайлов
+                                let photoCount = photoManager.photos.filter { !photoManager.isVideo($0) }.count
+                                let videoCount = photoManager.photos.filter { photoManager.isVideo($0) }.count
+                                
+                                HStack(spacing: 8) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "photo.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                        Text("\(photoCount)")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                    
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "video.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                        Text("\(videoCount)")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
                         }
                         .padding()
                         .background(Color.black.opacity(0.7))
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-
-                        
-                        // Сетка фотографий
+                        // Сетка медиафайлов
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 2) {
                                 ForEach(Array(photoManager.photos.enumerated()), id: \.element.localIdentifier) { index, photo in
                                     PhotoSelectionCell(
                                         photo: photo,
                                         index: index,
-                                        isSelected: selectedPhotoIndex == index
+                                        isSelected: selectedPhotoIndex == index,
+                                        photoManager: photoManager
                                     ) {
                                         selectedPhotoIndex = index
                                         photoManager.currentPhotoIndex = index
@@ -59,7 +84,6 @@ struct PhotoSelectionView: View {
                             }
                             .padding(.horizontal)
                         }
-
                         
                         // Кнопка возврата
                         Button(action: {
@@ -68,8 +92,7 @@ struct PhotoSelectionView: View {
                             HStack {
                                 Image(systemName: "chevron.left")
                                     .font(.title2)
-                                Text("Вернуться в главное меню")
-                                    .font(.headline)
+//
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -86,17 +109,17 @@ struct PhotoSelectionView: View {
                             .font(.system(size: 80))
                             .foregroundColor(.white)
                         
-                        Text("Доступ к фотографиям")
+                        Text("Acess to mediafiles")
                             .font(.title)
                             .foregroundColor(.white)
                         
-                        Text("Для выбора фотографий необходимо разрешить доступ к галерее")
+                        Text("Grant acess for selecting media")
                             .font(.body)
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                         
-                        Button("Разрешить доступ") {
+                        Button("Grant acess") {
                             photoManager.requestPhotoLibraryAccess()
                         }
                         .font(.headline)
@@ -107,11 +130,11 @@ struct PhotoSelectionView: View {
                     }
                 }
             }
-            .navigationTitle("Выбор фото")
+            .navigationTitle("Select mediafiles")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Закрыть") {
+                    Button("Close") {
                         dismiss()
                     }
                     .foregroundColor(.white)
@@ -121,7 +144,6 @@ struct PhotoSelectionView: View {
         .fullScreenCover(isPresented: $showingPhotoViewer) {
             PhotoViewer(photoManager: photoManager, canReturnToSelection: true)
         }
-
     }
 }
 
@@ -129,6 +151,7 @@ struct PhotoSelectionCell: View {
     let photo: PHAsset
     let index: Int
     let isSelected: Bool
+    let photoManager: PhotoManager
     let onTap: () -> Void
     @State private var image: UIImage?
     
@@ -149,9 +172,32 @@ struct PhotoSelectionCell: View {
                         .cornerRadius(10)
                 }
                 
-                // Индикатор выбора
-                if isSelected {
-                    VStack {
+                // Индикатор типа медиафайла
+                VStack {
+                    HStack {
+                        if photoManager.isVideo(photo) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "video.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                                Text(photoManager.getVideoDuration(photo))
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.7))
+                            .cornerRadius(6)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(5)
+                    
+                    Spacer()
+                    
+                    // Индикатор выбора
+                    if isSelected {
                         HStack {
                             Spacer()
                             Image(systemName: "checkmark.circle.fill")
@@ -160,9 +206,8 @@ struct PhotoSelectionCell: View {
                                 .background(Color.black.opacity(0.7))
                                 .clipShape(Circle())
                         }
-                        Spacer()
+                        .padding(5)
                     }
-                    .padding(5)
                 }
             }
         }

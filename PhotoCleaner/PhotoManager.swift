@@ -1,13 +1,14 @@
 import Foundation
 import Photos
 import UIKit
+import AVKit
 
 class PhotoManager: ObservableObject {
     @Published var photos: [PHAsset] = []
     @Published var currentPhotoIndex: Int = 0
     @Published var isAuthorized = false
-    @Published var photosToDelete: Set<String> = [] // ID фотографий для удаления
-    @Published var photosToKeep: Set<String> = [] // ID фотографий для сохранения
+    @Published var photosToDelete: Set<String> = [] // ID медиафайлов для удаления
+    @Published var photosToKeep: Set<String> = [] // ID медиафайлов для сохранения
     
     init() {
         requestPhotoLibraryAccess()
@@ -48,13 +49,35 @@ class PhotoManager: ObservableObject {
         
         // Выполняем загрузку на фоновом потоке
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let fetchResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            // Загружаем фото и видео отдельно, затем объединяем
+            let photosFetch = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            let videosFetch = PHAsset.fetchAssets(with: .video, options: fetchOptions)
+            
+            // Объединяем результаты
+            var allAssets: [PHAsset] = []
+            
+            // Добавляем фото
+            for i in 0..<photosFetch.count {
+                allAssets.append(photosFetch.object(at: i))
+            }
+            
+            // Добавляем видео
+            for i in 0..<videosFetch.count {
+                allAssets.append(videosFetch.object(at: i))
+            }
+            
+            // Сортируем по дате создания (новые сначала)
+            allAssets.sort { asset1, asset2 in
+                let date1 = asset1.creationDate ?? Date.distantPast
+                let date2 = asset2.creationDate ?? Date.distantPast
+                return date1 > date2
+            }
             
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                // Ограничиваем количество загружаемых фотографий для предотвращения переполнения памяти
-                let maxPhotos = min(fetchResult.count, 10000)
-                self.photos = fetchResult.objects(at: IndexSet(0..<maxPhotos))
+                // Ограничиваем количество загружаемых медиафайлов для предотвращения переполнения памяти
+                let maxPhotos = min(allAssets.count, 10000)
+                self.photos = Array(allAssets.prefix(maxPhotos))
                 self.currentPhotoIndex = 0 // Сбрасываем индекс к началу
             }
         }
@@ -229,6 +252,38 @@ class PhotoManager: ObservableObject {
         photosToKeep.removeAll()
     }
     
+    // Функция для восстановления медиафайла из корзины
+    func restoreFromTrash(_ photoId: String) {
+        guard !photoId.isEmpty else { return }
+        
+        // Убираем из корзины
+        photosToDelete.remove(photoId)
+        
+        // Убираем из списка сохранения, если был там
+        photosToKeep.remove(photoId)
+    }
+    
+    // Функция для восстановления нескольких медиафайлов
+    func restoreMultipleFromTrash(_ photoIds: Set<String>) {
+        guard !photoIds.isEmpty else { return }
+        
+        // Валидация входных данных
+        let validIds = photoIds.filter { !$0.isEmpty }
+        guard !validIds.isEmpty else { return }
+        
+        // Убираем из корзины
+        for photoId in validIds {
+            photosToDelete.remove(photoId)
+            photosToKeep.remove(photoId)
+        }
+    }
+    
+    // Функция для восстановления всех медиафайлов из корзины
+    func restoreAllFromTrash() {
+        photosToDelete.removeAll()
+        photosToKeep.removeAll()
+    }
+    
     func getPhotoImage(for asset: PHAsset, size: CGSize, completion: @escaping (UIImage?) -> Void) {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
@@ -260,5 +315,66 @@ class PhotoManager: ObservableObject {
         
         // Сохраняем ID запроса для возможности отмены
         // В реальном приложении можно добавить словарь для отслеживания активных запросов
+    }
+    
+    // Новая функция для получения AVPlayerItem для видео
+    func getVideoPlayerItem(for asset: PHAsset, completion: @escaping (AVPlayerItem?) -> Void) {
+        // Проверяем, что это действительно видео
+        guard asset.mediaType == .video else {
+            DispatchQueue.main.async {
+                completion(nil)
+            }
+            return
+        }
+        
+        let options = PHVideoRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        
+        // Добавляем таймаут для предотвращения зависания
+        let timeout = DispatchTime.now() + Constants.Timeouts.videoLoadTimeout
+        
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, audioMix, info in
+            // Проверяем таймаут
+            if DispatchTime.now() > timeout {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                if let avAsset = avAsset {
+                    let playerItem = AVPlayerItem(asset: avAsset)
+                    completion(playerItem)
+                } else {
+                    // Проверяем ошибку
+                    if let error = info?[PHImageErrorKey] as? Error {
+                        print("Video loading error: \(error.localizedDescription)")
+                    }
+                    completion(nil)
+                }
+            }
+        }
+    }
+    
+    // Функция для проверки типа медиафайла
+    func isVideo(_ asset: PHAsset) -> Bool {
+        // Дополнительная проверка для безопасности
+        guard asset.mediaType == .video else { return false }
+        
+        // Проверяем, что длительность видео корректна
+        let duration = asset.duration
+        guard duration.isFinite && !duration.isNaN && duration > 0 else { return false }
+        
+        return true
+    }
+    
+    // Функция для получения длительности видео
+    func getVideoDuration(_ asset: PHAsset) -> String {
+        let duration = asset.duration
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }

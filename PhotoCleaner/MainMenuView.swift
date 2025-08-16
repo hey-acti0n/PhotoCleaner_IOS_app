@@ -28,7 +28,7 @@ struct MainMenuView: View {
                             .fontWeight(.bold)
                             .foregroundColor(.white)
                         
-                        Text("Очистка фотографий")
+                        Text("Clear your gallery")
                             .font(.title2)
                             .foregroundColor(.white.opacity(0.9))
                     }
@@ -42,7 +42,7 @@ struct MainMenuView: View {
                             HStack {
                                 Image(systemName: "play.fill")
                                     .font(.title2)
-                                Text("Начать очистку")
+                                Text("Start selecting")
                                     .font(.title2)
                                     .fontWeight(.semibold)
                             }
@@ -61,7 +61,7 @@ struct MainMenuView: View {
                             HStack {
                                 Image(systemName: "trash.fill")
                                     .font(.title2)
-                                Text("Корзина")
+                                Text("Bin")
                                     .font(.title2)
                                     .fontWeight(.semibold)
                             }
@@ -82,7 +82,7 @@ struct MainMenuView: View {
                             HStack {
                                 Image(systemName: "trash.circle.fill")
                                     .font(.title2)
-                                Text("Очистить корзину")
+                                Text("Clear the bin")
                                     .font(.title2)
                                     .fontWeight(.semibold)
                             }
@@ -106,7 +106,7 @@ struct MainMenuView: View {
                                     .font(.title)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
-                                Text("Всего фото")
+                                Text("Total files")
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.8))
                             }
@@ -118,7 +118,7 @@ struct MainMenuView: View {
                                     .font(.title)
                                     .fontWeight(.bold)
                                     .foregroundColor(.red)
-                                Text("В корзине")
+                                Text("Bin")
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.8))
                             }
@@ -130,7 +130,7 @@ struct MainMenuView: View {
                                     .font(.title)
                                     .fontWeight(.bold)
                                     .foregroundColor(.green)
-                                Text("Отмечено")
+                                Text("Marked")
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.8))
                             }
@@ -138,6 +138,42 @@ struct MainMenuView: View {
                         .padding()
                         .background(Color.black.opacity(0.3))
                         .cornerRadius(20)
+                        
+                        // Детальная статистика по типам
+                        if !photoManager.photos.isEmpty {
+                            HStack(spacing: 20) {
+                                let photoCount = photoManager.photos.filter { !photoManager.isVideo($0) }.count
+                                let videoCount = photoManager.photos.filter { photoManager.isVideo($0) }.count
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "photo.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                    Text("\(photoCount)")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                    Text("photo")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "video.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                    Text("\(videoCount)")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                    Text("video")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.2))
+                            .cornerRadius(15)
+                        }
                     }
                     .padding(.horizontal, 40)
                     

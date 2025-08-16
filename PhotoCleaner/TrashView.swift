@@ -18,7 +18,7 @@ struct TrashView: View {
                             .font(.system(size: 80))
                             .foregroundColor(.gray)
                         
-                        Text("Корзина пуста")
+                        Text("Bin empty")
                             .font(.title)
                             .foregroundColor(.white)
                         
@@ -29,28 +29,55 @@ struct TrashView: View {
                             .padding(.horizontal)
                     }
                 } else {
-                    // Список фотографий в корзине
+                    // Список медиафайлов в корзине
                     VStack {
                         // Заголовок с количеством
                         HStack {
-                            Text("Фотографии для удаления")
+                            Text("For cleaning")
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                             
                             Spacer()
                             
-                            Text("\(photoManager.photosToDelete.count)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.red)
+                            VStack(alignment: .trailing) {
+                                Text("\(photoManager.photosToDelete.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.red)
+                                
+                                // Статистика по типам в корзине
+                                let photoIds = photoManager.photosToDelete
+                                let photoCount = photoManager.photos.filter { photoIds.contains($0.localIdentifier) && !photoManager.isVideo($0) }.count
+                                let videoCount = photoManager.photos.filter { photoIds.contains($0.localIdentifier) && photoManager.isVideo($0) }.count
+                                
+                                HStack(spacing: 8) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "photo.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                        Text("\(photoCount)")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                    
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "video.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                        Text("\(videoCount)")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
                         }
                         .padding()
                         .background(Color.black.opacity(0.7))
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Список фотографий
+                        // Список медиафайлов
                         ScrollView {
                             LazyVGrid(columns: [
                                 GridItem(.flexible()),
@@ -62,6 +89,7 @@ struct TrashView: View {
                                     if let photo = photoManager.getPhotoById(photoId) {
                                         TrashPhotoCell(
                                             photo: photo,
+                                            photoManager: photoManager,
                                             isSelected: selectedPhotos.contains(photoId),
                                             onToggle: {
                                                 if selectedPhotos.contains(photoId) {
@@ -91,7 +119,7 @@ struct TrashView: View {
                                     HStack {
                                         Image(systemName: selectedPhotos.count == photoManager.photosToDelete.count ? "checkmark.square.fill" : "square")
                                             .font(.title2)
-                                        Text(selectedPhotos.count == photoManager.photosToDelete.count ? "Снять выбор" : "Выбрать все")
+                                        Text(selectedPhotos.count == photoManager.photosToDelete.count ? "Remove selection" : "Select all")
                                             .font(.headline)
                                     }
                                     .foregroundColor(.white)
@@ -101,6 +129,28 @@ struct TrashView: View {
                                     .cornerRadius(25)
                                 }
                                 
+                                // Кнопка восстановления выбранных
+                                Button(action: {
+                                    photoManager.restoreMultipleFromTrash(selectedPhotos)
+                                    selectedPhotos.removeAll()
+                                }) {
+                                    HStack {
+                                        Image(systemName: "arrow.uturn.backward")
+                                            .font(.title2)
+                                        Text("Restore")
+                                            .font(.headline)
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .background(Color.green)
+                                    .cornerRadius(25)
+                                }
+                                .disabled(selectedPhotos.isEmpty)
+                                .opacity(selectedPhotos.isEmpty ? 0.6 : 1.0)
+                            }
+                            
+                            HStack(spacing: 15) {
                                 // Кнопка удаления выбранных
                                 Button(action: {
                                     photoManager.deleteSelectedPhotos(selectedPhotos)
@@ -109,7 +159,7 @@ struct TrashView: View {
                                     HStack {
                                         Image(systemName: "trash.fill")
                                             .font(.title2)
-                                        Text("Удалить выбранные")
+                                        Text("Delete selected")
                                             .font(.headline)
                                     }
                                     .foregroundColor(.white)
@@ -120,6 +170,24 @@ struct TrashView: View {
                                 }
                                 .disabled(selectedPhotos.isEmpty)
                                 .opacity(selectedPhotos.isEmpty ? 0.6 : 1.0)
+                                
+                                // Кнопка восстановления всех
+                                Button(action: {
+                                    photoManager.restoreAllFromTrash()
+                                    selectedPhotos.removeAll()
+                                }) {
+                                    HStack {
+                                        Image(systemName: "arrow.uturn.backward.circle")
+                                            .font(.title2)
+                                        Text("Restore all")
+                                            .font(.headline)
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .background(Color.green)
+                                    .cornerRadius(25)
+                                }
                             }
                             
                             // Кнопка очистки корзины
@@ -130,7 +198,7 @@ struct TrashView: View {
                                 HStack {
                                     Image(systemName: "trash.circle.fill")
                                         .font(.title2)
-                                    Text("Очистить всю корзину")
+                                    Text("Delete all")
                                         .font(.headline)
                                         .fontWeight(.bold)
                                 }
@@ -145,23 +213,33 @@ struct TrashView: View {
                     }
                 }
             }
-            .navigationTitle("Корзина")
+            .navigationTitle("Bin")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Закрыть") {
+                    Button("Close") {
                         dismiss()
                     }
                     .foregroundColor(.white)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if !photoManager.photosToDelete.isEmpty {
-                        Button("Очистить") {
-                            photoManager.deleteMarkedPhotos()
-                            selectedPhotos.removeAll()
+                    HStack(spacing: 15) {
+                        if !photoManager.photosToDelete.isEmpty {
+                            Button("Restore all") {
+                                photoManager.restoreAllFromTrash()
+                                selectedPhotos.removeAll()
+                            }
+                            .foregroundColor(.green)
                         }
-                        .foregroundColor(.red)
+                        
+                        if !photoManager.photosToDelete.isEmpty {
+                            Button("Clean") {
+                                photoManager.deleteMarkedPhotos()
+                                selectedPhotos.removeAll()
+                            }
+                            .foregroundColor(.red)
+                        }
                     }
                 }
             }
@@ -171,9 +249,11 @@ struct TrashView: View {
 
 struct TrashPhotoCell: View {
     let photo: PHAsset
+    let photoManager: PhotoManager
     let isSelected: Bool
     let onToggle: () -> Void
     @State private var image: UIImage?
+    @State private var showingRestoreAlert = false
     
     var body: some View {
         ZStack {
@@ -191,10 +271,27 @@ struct TrashPhotoCell: View {
                     .cornerRadius(10)
             }
             
-            // Индикатор выбора
+            // Индикатор типа медиафайла
             VStack {
                 HStack {
+                    if photoManager.isVideo(photo) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "video.fill")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            Text(photoManager.getVideoDuration(photo))
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(6)
+                    }
+                    
                     Spacer()
+                    
+                    // Индикатор выбора
                     Button(action: onToggle) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.title2)
@@ -203,9 +300,10 @@ struct TrashPhotoCell: View {
                             .clipShape(Circle())
                     }
                 }
+                .padding(5)
+                
                 Spacer()
             }
-            .padding(5)
         }
         .onAppear {
             loadImage()
@@ -213,6 +311,17 @@ struct TrashPhotoCell: View {
         .onDisappear {
             // Очищаем изображение при исчезновении ячейки
             image = nil
+        }
+        .onLongPressGesture {
+            showingRestoreAlert = true
+        }
+        .alert("Restore mediafile?", isPresented: $showingRestoreAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Restore", role: .destructive) {
+                photoManager.restoreFromTrash(photo.localIdentifier)
+            }
+        } message: {
+            Text("Media will be restored")
         }
     }
     

@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import AVKit
 
 struct PhotoViewer: View {
     @ObservedObject var photoManager: PhotoManager
@@ -64,89 +65,110 @@ struct PhotoViewer: View {
                     }
                     
                     if let currentPhoto = photoManager.getCurrentPhoto() {
-                        // Основное изображение
-                        if let image = currentImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
+                        // Основное содержимое (фото или видео)
+                        if photoManager.isVideo(currentPhoto) {
+                            // Отображение видео
+                            VideoPlayerView(asset: currentPhoto, photoManager: photoManager)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .scaleEffect(scale)
-                                .offset(x: offset.width + dragOffset.width, y: offset.height + dragOffset.height)
                                 .gesture(
-                                    // Жест свайпа для навигации
+                                    // Жест свайпа для навигации по видео
                                     DragGesture()
                                         .onChanged { value in
-                                            // Если изображение не увеличено, обрабатываем свайп для навигации
-                                            if scale <= 1.0 {
-                                                dragOffset = value.translation
-                                            } else {
-                                                // Если увеличено, перемещаем изображение
-                                                offset = CGSize(
-                                                    width: lastOffset.width + value.translation.width,
-                                                    height: lastOffset.height + value.translation.height
-                                                )
-                                            }
+                                            dragOffset = value.translation
                                         }
                                         .onEnded { value in
-                                            if scale <= 1.0 {
-                                                handleSwipe(value: value)
-                                            } else {
-                                                // Сохраняем позицию для следующего жеста
-                                                lastOffset = offset
-                                            }
+                                            handleSwipe(value: value)
                                         }
                                 )
-                                .gesture(
-                                    // Жест масштабирования
-                                    MagnificationGesture()
-                                        .onChanged { value in
-                                            let delta = value / lastScale
-                                            lastScale = value
-                                            scale = min(max(scale * delta, 1.0), 4.0)
-                                            
-                                            // Сбрасываем смещение при возврате к нормальному размеру
-                                            if scale <= 1.0 {
-                                                withAnimation(.spring()) {
-                                                    offset = .zero
-                                                    lastOffset = .zero
+                                .onDisappear {
+                                    // Сбрасываем состояние при исчезновении видео
+                                    dragOffset = .zero
+                                }
+                        } else {
+                            // Отображение фото (существующая логика)
+                            if let image = currentImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .scaleEffect(scale)
+                                    .offset(x: offset.width + dragOffset.width, y: offset.height + dragOffset.height)
+                                    .gesture(
+                                        // Жест свайпа для навигации
+                                        DragGesture()
+                                            .onChanged { value in
+                                                // Если изображение не увеличено, обрабатываем свайп для навигации
+                                                if scale <= 1.0 {
+                                                    dragOffset = value.translation
+                                                } else {
+                                                    // Если увеличено, перемещаем изображение
+                                                    offset = CGSize(
+                                                        width: lastOffset.width + value.translation.width,
+                                                        height: lastOffset.height + value.translation.height
+                                                    )
                                                 }
                                             }
-                                        }
-                                        .onEnded { _ in
-                                            lastScale = 1.0
-                                            
-                                            // Возвращаем к нормальному размеру, если слишком маленький
-                                            if scale < 1.0 {
+                                            .onEnded { value in
+                                                if scale <= 1.0 {
+                                                    handleSwipe(value: value)
+                                                } else {
+                                                    // Сохраняем позицию для следующего жеста
+                                                    lastOffset = offset
+                                                }
+                                            }
+                                    )
+                                    .gesture(
+                                        // Жест масштабирования
+                                        MagnificationGesture()
+                                            .onChanged { value in
+                                                let delta = value / lastScale
+                                                lastScale = value
+                                                scale = min(max(scale * delta, 1.0), 4.0)
+                                                
+                                                // Сбрасываем смещение при возврате к нормальному размеру
+                                                if scale <= 1.0 {
+                                                    withAnimation(.spring()) {
+                                                        offset = .zero
+                                                        lastOffset = .zero
+                                                    }
+                                                }
+                                            }
+                                            .onEnded { _ in
+                                                lastScale = 1.0
+                                                
+                                                // Возвращаем к нормальному размеру, если слишком маленький
+                                                if scale < 1.0 {
+                                                    withAnimation(.spring()) {
+                                                        scale = 1.0
+                                                        offset = .zero
+                                                        lastOffset = .zero
+                                                    }
+                                                }
+                                            }
+                                    )
+                                    .gesture(
+                                        // Двойной тап для сброса масштаба
+                                        TapGesture(count: 2)
+                                            .onEnded {
                                                 withAnimation(.spring()) {
                                                     scale = 1.0
                                                     offset = .zero
                                                     lastOffset = .zero
+                                                    dragOffset = .zero
                                                 }
                                             }
-                                        }
-                                )
-                                .gesture(
-                                    // Двойной тап для сброса масштаба
-                                    TapGesture(count: 2)
-                                        .onEnded {
-                                            withAnimation(.spring()) {
-                                                scale = 1.0
-                                                offset = .zero
-                                                lastOffset = .zero
-                                                dragOffset = .zero
-                                            }
-                                        }
-                                )
-                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scale)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: offset)
-                        } else {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .foregroundColor(.white)
+                                    )
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scale)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: offset)
+                            } else {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                    .foregroundColor(.white)
+                            }
                         }
                         
-                        // Кнопка выхода поверх фотографии
+                        // Кнопка выхода поверх медиафайла
                         VStack {
                             HStack {
                                 Button(action: {
@@ -155,7 +177,7 @@ struct PhotoViewer: View {
                                     HStack {
                                         Image(systemName: "chevron.left")
                                             .font(.title2)
-                                        Text(canReturnToSelection ? "Выбор фото" : "Главное меню")
+                                        Text(canReturnToSelection ? "Gallery" : "Main menu")
                                             .font(.headline)
                                     }
                                     .foregroundColor(.white)
@@ -180,7 +202,9 @@ struct PhotoViewer: View {
                                 Button(action: {
                                     withAnimation {
                                         photoManager.markPhotoForDeletion()
-                                        loadCurrentImage()
+                                        if !photoManager.isVideo(currentPhoto) {
+                                            loadCurrentImage()
+                                        }
                                     }
                                 }) {
                                     Image(systemName: "trash")
@@ -195,7 +219,9 @@ struct PhotoViewer: View {
                                 Button(action: {
                                     withAnimation {
                                         photoManager.keepCurrentPhoto()
-                                        loadCurrentImage()
+                                        if !photoManager.isVideo(currentPhoto) {
+                                            loadCurrentImage()
+                                        }
                                     }
                                 }) {
                                     Image(systemName: "checkmark")
@@ -217,7 +243,7 @@ struct PhotoViewer: View {
                                     Image(systemName: "arrow.left")
                                         .font(.title)
                                         .foregroundColor(.red)
-                                    Text("Удалить")
+                                    Text("Delete")
                                         .font(.caption)
                                         .foregroundColor(.red)
                                 }
@@ -230,7 +256,7 @@ struct PhotoViewer: View {
                                     Image(systemName: "arrow.right")
                                         .font(.title)
                                         .foregroundColor(.green)
-                                    Text("Оставить")
+                                    Text("Keep")
                                         .font(.caption)
                                         .foregroundColor(.green)
                                 }
@@ -243,13 +269,13 @@ struct PhotoViewer: View {
                         }
                         .padding(.top, 60)
                     } else {
-                        // Нет фотографий
+                        // Нет медиафайлов
                         VStack(spacing: 20) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .font(.system(size: 80))
                                 .foregroundColor(.white)
                             
-                            Text("Нет фотографий")
+                            Text("Empty gallery")
                                 .font(.title)
                                 .foregroundColor(.white)
                             
@@ -267,7 +293,7 @@ struct PhotoViewer: View {
                             .font(.system(size: 80))
                             .foregroundColor(.white)
                         
-                        Text("Доступ к фотографиям")
+                        Text("Acess to mediafiles")
                             .font(.title)
                             .foregroundColor(.white)
                         
@@ -277,7 +303,7 @@ struct PhotoViewer: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                         
-                        Button("Разрешить доступ") {
+                        Button("Grant acess") {
                             photoManager.requestPhotoLibraryAccess()
                         }
                         .font(.headline)
@@ -290,24 +316,31 @@ struct PhotoViewer: View {
             }
         }
         .onAppear {
-            loadCurrentImage()
+            if let currentPhoto = photoManager.getCurrentPhoto(), !photoManager.isVideo(currentPhoto) {
+                loadCurrentImage()
+            }
         }
         .onChange(of: photoManager.currentPhotoIndex) { _ in
-            // Сбрасываем масштаб и позицию при смене фото
+            // Сбрасываем масштаб и позицию при смене медиафайла
             withAnimation(.spring()) {
                 scale = 1.0
                 offset = .zero
                 lastOffset = .zero
                 dragOffset = .zero
             }
-            loadCurrentImage()
+            
+            if let currentPhoto = photoManager.getCurrentPhoto(), !photoManager.isVideo(currentPhoto) {
+                loadCurrentImage()
+            }
         }
         .onDisappear {
             // Очищаем изображение при закрытии экрана
             currentImage = nil
         }
         .onChange(of: photoManager.photos.count) { _ in
-            loadCurrentImage()
+            if let currentPhoto = photoManager.getCurrentPhoto(), !photoManager.isVideo(currentPhoto) {
+                loadCurrentImage()
+            }
         }
     }
     
@@ -316,6 +349,9 @@ struct PhotoViewer: View {
             currentImage = nil
             return
         }
+        
+        // Загружаем изображение только для фото
+        guard !photoManager.isVideo(currentPhoto) else { return }
         
         // Сбрасываем текущее изображение перед загрузкой нового
         currentImage = nil
@@ -341,21 +377,25 @@ struct PhotoViewer: View {
         // Проверяем, что свайп преимущественно горизонтальный
         if abs(horizontalAmount) > abs(verticalAmount) {
             if horizontalAmount > swipeThreshold {
-                // Свайп вправо - оставить фото
+                // Свайп вправо - оставить медиафайл
                 withAnimation {
                     photoManager.keepCurrentPhoto()
-                    loadCurrentImage()
+                    if let currentPhoto = photoManager.getCurrentPhoto(), !photoManager.isVideo(currentPhoto) {
+                        loadCurrentImage()
+                    }
                 }
             } else if horizontalAmount < -swipeThreshold {
                 // Свайп влево - отметить для удаления
                 withAnimation {
                     photoManager.markPhotoForDeletion()
-                    loadCurrentImage()
+                    if let currentPhoto = photoManager.getCurrentPhoto(), !photoManager.isVideo(currentPhoto) {
+                        loadCurrentImage()
+                    }
                 }
             }
         }
         
-        // Возвращаем фото в исходное положение
+        // Возвращаем медиафайл в исходное положение
         dragOffset = .zero
     }
 }
